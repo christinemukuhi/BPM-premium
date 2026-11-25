@@ -135,3 +135,14 @@ assert.equal(sp.ref, 'Song of Solomon 2:1–3');
 const a = bibleSource(BIBLE, 43, 8, 36, 38, false);
 assert.deepEqual(a.th.verses.map((v) => v.r), ['Acts 8:36', 'Acts 8:38']);
 assert.ok(!verseNums(BIBLE.books[43], 8).includes(37));
+
+// word search answer key: every word has a slot that reads back exactly from the grid
+for (const lv of ['easy', 'medium', 'hard']) {
+  const ws = wordsearch(D.themes[0].vocab, lv, rng(7));
+  assert.equal(ws.slots.length, ws.words.length);
+  for (const s of ws.slots) {
+    let t = ''; for (let i = 0; i < s.w.length; i++) t += ws.grid[s.r + s.dr * i][s.c + s.dc * i];
+    assert.equal(t, s.w, 'slot spells ' + s.w);
+  }
+}
+console.log('word search slots OK');
