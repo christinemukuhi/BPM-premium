@@ -1,0 +1,17 @@
+{
+  "name": "bible-puzzle-maker-full",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node scripts/test-engine.mjs",
+    "build:bible": "node scripts/build-bible.mjs web.json"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "vite-plugin-pwa": "^0.20.5"
+  }
+}
