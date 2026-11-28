@@ -10,6 +10,8 @@ An installable web app (PWA) that makes printable Bible puzzles with sticker art
   - **Word search, word scramble and crossword** use words taken from the verses you choose (up to 15 verses). Crossword clues are the verse text with the answer blanked out
   - Stickers are picked automatically from the words in the passage
 
+- **Pack (one combined PDF):** press **Add to pack** on any puzzle you like. Your pack lists them, and you can reorder them (↑ ↓), remove any, and choose where the answer keys go: all at the end, after each puzzle, or not at all. **Print or save pack as PDF** puts everything in one PDF. In the print window choose **Save as PDF**. The pack is saved on that device and stays after you close the app. It uses the Paper and Stickers settings at the time you print.
+
 Not included yet: "My own text" and custom word lists.
 
 ## Run it on your computer

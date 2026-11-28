@@ -17,6 +17,7 @@ button{font:700 1rem inherit;font-family:inherit;padding:.65rem 1rem;border-radi
 button.primary{background:var(--ink);color:var(--bg)}
 button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
 .actions{display:grid;gap:.5rem}
+.bctl{display:grid;gap:.85rem}
 .note{margin:0;font-size:.85rem;color:var(--muted)}
 #preview{display:grid;gap:1.25rem;justify-items:center;overflow-x:auto}
 /* worksheet: always paper-white, in both themes */
@@ -27,7 +28,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 .band{display:flex;align-items:center;justify-content:center;gap:1rem}
 .band img{height:1.1in;width:1.1in;object-fit:contain;flex:none}
 .sheet h2{margin:0;font:800 2.3rem ui-rounded,"Arial Rounded MT Bold","Trebuchet MS",sans-serif;text-align:center;color:var(--accd)}
-.strip{display:flex;justify-content:space-around;align-items:flex-end;gap:.3rem;margin-top:auto;padding-top:.2in;min-height:.3in}
+.strip{display:flex;justify-content:space-around;align-items:flex-end;gap:.3rem;margin-top:auto;padding-top:.2in;min-height:.3in;flex:none}
 .strip img{height:.8in;max-width:1.15in;object-fit:contain}
 .bw img{filter:grayscale(1) contrast(1.25)}
 .tile:nth-child(5n+1),.bank li:nth-child(5n+1){background:#FFE8A3}.tile:nth-child(5n+2),.bank li:nth-child(5n+2){background:#CFE8FF}.tile:nth-child(5n+3),.bank li:nth-child(5n+3){background:#D6F2D6}.tile:nth-child(5n+4),.bank li:nth-child(5n+4){background:#F9D4E6}.tile:nth-child(5n),.bank li:nth-child(5n){background:#E5D9FA}
@@ -82,3 +83,20 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 .sheet.compact .name-line{margin-bottom:.2in}
 .sheet.compact .how{margin-bottom:.15in}
 .clues small{font-weight:400;color:#444}
+
+/* pack: several puzzles in one PDF */
+button.wide{width:100%}
+.pack{border:2px solid #d5deed;border-radius:12px;padding:.6rem .8rem;display:grid;gap:.7rem}
+.pack summary{cursor:pointer;font-weight:700}
+.pack ol{list-style:decimal;margin:0;padding-left:1.3rem;display:grid;gap:.45rem;font-size:.9rem}
+.pack ol:empty{display:none}
+.pack li::marker{font-weight:700}
+.pack li{padding-left:.15rem}.pack .pl{display:block;line-height:1.3}
+.pack .pk{display:inline-flex;gap:.25rem;margin-top:.2rem}
+.pack .pk button{padding:.05rem .5rem;font-size:.85rem;border-width:1px;border-radius:6px}
+.pack button:disabled{opacity:.45;cursor:not-allowed}
+#packOut{position:absolute;left:-99999px;top:0;width:var(--sheet-w)}
+#packOut .sheet{zoom:1}
+@media print{body.printing-pack .layout{display:none!important}body.printing-pack #packOut{position:static;left:auto;width:auto}body:not(.printing-pack) #packOut{display:none}}
+.pack label{margin-top:.3rem}
+.pack .actions{margin-top:.2rem}

@@ -122,10 +122,14 @@ function syncSource(){
     ?'Verses are World English Bible text. Word searches, scrambles and crosswords use words taken from your chosen passage (up to '+MAX_RANGE+' verses).'
     :'Verses are World English Bible text. Word searches and letter scrambles use each theme’s vocabulary list.';
 }
+async function loadBible(){
+  if(BIBLE)return;
+  BIBLE=(await import('./data/bible.json')).default;fillBooks();
+}
 async function ensureBible(){
   if(BIBLE||bibleLoading)return;
   bibleLoading=true;emptyMsg('Loading the Bible…');
-  try{BIBLE=(await import('./data/bible.json')).default;fillBooks()}
+  try{await loadBible()}
   catch(e){$('#src').value='themes'}
   bibleLoading=false;syncSource();render();
   if(!BIBLE)emptyMsg('The Bible could not be loaded. Check your connection and try again.');
@@ -146,24 +150,27 @@ function fitSheets(){
 }
 /* ---------- render ---------- */
 const emptyMsg=m=>{$('#preview').innerHTML=`<p class="empty">${m}</p>`};
-function render(){
-  const type=$('#type').value,lv=$('#level').value,paper=$('#paper').value,bible=$('#src').value==='bible';
-  const needV=type==='scramble'||type==='cloze';
-  syncSource();
-  $('#levelNote').textContent=NOTES[type][lv];
-  let th,start=0,ref='';
-  if(bible){
-    if(!BIBLE){ensureBible();return}
-    ({th,start,ref}=bibleSource(BIBLE,val('book'),val('chap'),val('vfrom'),needV?val('vfrom'):val('vto'),needV));
-  }else{th=D.themes[$('#theme').value];start=Number($('#verse').value)}
-  $('#pv').innerHTML=th.stk.map(img).join('');
+// Reads every control into one plain object, so a puzzle can be saved and rebuilt later (the pack uses this)
+function readCfg(){
+  return{src:$('#src').value,theme:$('#theme').value,verse:$('#verse').value,book:$('#book').value,chap:$('#chap').value,vfrom:$('#vfrom').value,vto:$('#vto').value,type:$('#type').value,level:$('#level').value,len:$('#len').value,seed};
+}
+function setPaper(paper){
   document.documentElement.style.setProperty('--sheet-w',paper==='A4'?'210mm':'8.5in');
   document.documentElement.style.setProperty('--sheet-h',paper==='A4'?'297mm':'11in');
   let st=$('#pageStyle');if(!st){st=document.createElement('style');st.id='pageStyle';document.head.append(st)}
   st.textContent=`@page{size:${paper==='A4'?'A4':'letter'};margin:0}`;
-  const r=rng(seed);let p;
+}
+// Builds one puzzle from a set of choices. Returns {th,p,ref,lv}, or {error}, or {wait} while the Bible is still loading.
+function buildPuzzle(c){
+  const type=c.type,lv=c.level,bible=c.src==='bible',needV=type==='scramble'||type==='cloze';
+  let th,start=0,ref='';
+  if(bible){
+    if(!BIBLE)return{wait:true};
+    ({th,start,ref}=bibleSource(BIBLE,Number(c.book),Number(c.chap),Number(c.vfrom),needV?Number(c.vfrom):Number(c.vto),needV));
+  }else{th=D.themes[c.theme];start=Number(c.verse)}
+  const r=rng(c.seed);let p;
   if(needV){
-    let len=$('#len').value;const auto=len==='auto';
+    let len=c.len;const auto=len==='auto';
     if(auto)len=String({easy:2,medium:3,hard:4}[lv]);
     const ps=passage(th,start,len,TARGET[type][lv]);
     if(auto){ // keep each page to a sensible size
@@ -172,20 +179,87 @@ function render(){
       ps.vs=keep;ps.ref=refLabel(keep);
     }
     ref=ps.ref;
-    if(bible){th.stk=pickStickers(ps.text);$('#pv').innerHTML=th.stk.map(img).join('')}
+    if(bible)th.stk=pickStickers(ps.text);
     p=type==='scramble'?verseScramble(ps.vs,lv,r):cloze(ps.vs,lv,r);
   }else if(type==='crossword'){
     p=crossword(makeClues(th.vocab,th.verses,lv,bible?{}:CLUES).entries,lv,r);
-    if(p.words.length<4)return emptyMsg(bible?'Not enough different words for a crossword in this passage. Choose more verses or another age group.':'Not enough words for a crossword in this theme. Try another theme or age group.');
+    if(p.words.length<4)return{error:bible?'Not enough different words for a crossword in this passage. Choose more verses or another age group.':'Not enough words for a crossword in this theme. Try another theme or age group.'};
   }else{
     p=type==='wordsearch'?wordsearch(th.vocab,lv,r):letters(th.vocab,lv,r);
-    if((p.words||p.items).length<(bible?4:1))return emptyMsg(bible?'Not enough different words in this passage. Choose more verses.':'Not enough words for this puzzle. Try another theme.');
+    if((p.words||p.items).length<(bible?4:1))return{error:bible?'Not enough different words in this passage. Choose more verses.':'Not enough words for this puzzle. Try another theme.'};
   }
   p.bible=bible;
+  return{th,p,ref,lv};
+}
+function render(){
+  const c=readCfg();
+  syncSource();
+  $('#levelNote').textContent=NOTES[c.type][c.level];
+  setPaper($('#paper').value);
+  const res=buildPuzzle(c);
+  if(res.wait){ensureBible();return}
+  if(res.error)return emptyMsg(res.error);
+  $('#pv').innerHTML=res.th.stk.map(img).join('');
   const hint=window.innerWidth<=900?'<p class="note">Tip: tap a page to zoom in or out.</p>':'';
-  $('#preview').innerHTML=hint+sheet(th,p,false,ref,lv)+($('#key').checked?sheet(th,p,true,ref,lv):'');
+  $('#preview').innerHTML=hint+sheet(res.th,res.p,false,res.ref,res.lv)+($('#key').checked?sheet(res.th,res.p,true,res.ref,res.lv):'');
   fitSheets();
 }
+
+/* ---------- pack: collect several puzzles, then print or save them as one PDF ---------- */
+const PACK_KEY='bpm-pack-v1',PACK_MAX=60;
+let pack=[];
+try{pack=JSON.parse(localStorage.getItem(PACK_KEY)||'[]');if(!Array.isArray(pack))pack=[]}catch(e){pack=[]}
+const savePack=()=>{try{localStorage.setItem(PACK_KEY,JSON.stringify(pack))}catch(e){}};
+const packMsg=m=>{$('#packMsg').textContent=m;$('#packMsg').hidden=!m};
+function renderPack(){
+  $('#packCount').textContent=pack.length;
+  $('#packEmpty').hidden=pack.length>0;
+  $('#packList').innerHTML=pack.map((it,i)=>`<li><span class="pl">${esc(it.label)}</span><span class="pk"><button type="button" data-a="up" data-i="${i}" aria-label="Move up"${i?'':' disabled'}>↑</button><button type="button" data-a="down" data-i="${i}" aria-label="Move down"${i<pack.length-1?'':' disabled'}>↓</button><button type="button" data-a="del" data-i="${i}" aria-label="Remove from pack">✕</button></span></li>`).join('');
+  $('#packPrint').disabled=$('#packClear').disabled=!pack.length;
+}
+$('#addPack').addEventListener('click',()=>{
+  packMsg('');
+  const c=readCfg(),res=buildPuzzle(c);
+  if(res.wait||res.error)return packMsg('Choose a puzzle first.');
+  if(pack.length>=PACK_MAX)return packMsg('Your pack is full ('+PACK_MAX+' puzzles). Print it or remove some.');
+  const base=c.src==='bible'?res.ref:res.th.title+(res.ref?' · '+res.ref:'');
+  pack.push({c,label:base+' · '+$('#type').selectedOptions[0].text+' · '+$('#level').selectedOptions[0].text});
+  savePack();renderPack();
+  const b=$('#addPack');b.textContent='Added ✓';setTimeout(()=>{b.textContent='Add to pack'},1200);
+  $('#packBox').open=true;
+});
+$('#packList').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  const i=Number(b.dataset.i),a=b.dataset.a;
+  if(a==='del')pack.splice(i,1);
+  else if(a==='up'&&i>0)[pack[i-1],pack[i]]=[pack[i],pack[i-1]];
+  else if(a==='down'&&i<pack.length-1)[pack[i+1],pack[i]]=[pack[i],pack[i+1]];
+  savePack();renderPack();packMsg('');
+});
+$('#packClear').addEventListener('click',()=>{if(pack.length&&confirm('Remove all puzzles from your pack?')){pack=[];savePack();renderPack();packMsg('')}});
+async function printPack(){
+  packMsg('');
+  if(!pack.length)return;
+  if(pack.some(it=>it.c.src==='bible')&&!BIBLE){try{await loadBible()}catch(e){return packMsg('The Bible could not be loaded. Check your connection and try again.')}}
+  setPaper($('#paper').value);
+  const mode=$('#packKeys').value,pz=[],ks=[];let skipped=0;
+  pack.forEach(it=>{
+    let res;try{res=buildPuzzle(it.c)}catch(e){res=null}
+    if(!res||res.error||res.wait){skipped++;return}
+    const a=sheet(res.th,res.p,false,res.ref,res.lv),k=mode==='none'?'':sheet(res.th,res.p,true,res.ref,res.lv);
+    if(mode==='each')pz.push(a+k);else{pz.push(a);if(k)ks.push(k)}
+  });
+  if(!pz.length)return packMsg('None of the puzzles in your pack could be built. Try removing them and adding them again.');
+  $('#packOut').innerHTML=pz.join('')+ks.join('');
+  fitSheets();
+  if(skipped)packMsg(skipped+' puzzle'+(skipped>1?'s were':' was')+' skipped because it could not be built.');
+  document.body.classList.add('printing-pack');
+  window.print();
+}
+const endPackPrint=()=>{document.body.classList.remove('printing-pack');$('#packOut').innerHTML=''};
+window.addEventListener('afterprint',endPackPrint);
+$('#packPrint').addEventListener('click',printPack);
+renderPack();if(pack.length)$('#packBox').open=true;   // reopen a saved pack
 $('#theme').addEventListener('input',()=>{fillVerses();render()});
 $('#src').addEventListener('input',()=>{if($('#src').value==='bible'&&!BIBLE){ensureBible()}else render()});
 $('#book').addEventListener('input',()=>{fillChapters();render()});
@@ -196,7 +270,7 @@ $('#vto').addEventListener('input',render);
 // On phones the page preview is small: tap a page to zoom in or out
 $('#preview').addEventListener('click',function(e){if(window.innerWidth<=900&&e.target.closest&&e.target.closest('.sheet'))this.classList.toggle('big')});
 $('#again').addEventListener('click',()=>{seed=Date.now();render()});
-$('#print').addEventListener('click',()=>window.print());
+$('#print').addEventListener('click',()=>{endPackPrint();window.print()});
 $('#hdrStk').innerHTML=['lamb','dove','star'].map(img).join('');
 // In-app banner for your paid editions: set LANDING_URL and PROMO in src/config.js
 if(/^https?:\/\//.test(LANDING_URL)&&!LANDING_URL.includes('YOUR-')&&PROMO.appBannerText){
